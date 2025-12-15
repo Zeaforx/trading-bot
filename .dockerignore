@@ -1,0 +1,13 @@
+# Ignore local environment and secret files
+local.env
+.env
+*.env
+
+# Logs and caches
+logs/
+__pycache__/
+*.pyc
+venv/
+
+# Dockerfile and build outputs (if you generate them locally)
+*.tar
