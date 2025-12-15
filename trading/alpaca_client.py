@@ -1,39 +1,74 @@
-import alpaca_trade_api as tradeapi
+from alpaca.trading.client import TradingClient
+from alpaca.trading.requests import MarketOrderRequest, StopOrderRequest
+from alpaca.trading.enums import OrderSide, TimeInForce
 from config.settings import settings
 from notifications.discord_logger import discord_logger
 
 class AlpacaClient:
     def __init__(self):
-        self.api = tradeapi.REST(
+        # Initialize the modern TradingClient
+        self.client = TradingClient(
             settings.ALPACA_API_KEY,
             settings.ALPACA_SECRET_KEY,
-            settings.ALPACA_BASE_URL
+            paper=settings.ALPACA_PAPER
         )
-    
+
+    def get_account(self):
+        """Get account information"""
+        return self.client.get_account()
+
+    def get_portfolio_value(self):
+        """Get current total equity"""
+        account = self.get_account()
+        return float(account.portfolio_value)
+
     def get_position(self, symbol):
+        """Get current position for symbol. Returns None if no position."""
         try:
-            return self.api.get_position(symbol)
-        except:
+            # alpaca-py throws an APIError if position doesn't exist
+            return self.client.get_open_position(symbol)
+        except Exception:
             return None
-    
-    def submit_order(self, symbol, qty, side, stop_loss=None):
+
+    def submit_order(self, symbol, qty, side, order_type='market', stop_loss_price=None):
+        """
+        Submit order using modern Request objects.
+        side: 'buy' or 'sell' (string)
+        """
+        # 1. Convert string side to Enum
+        side_enum = OrderSide.BUY if side.lower() == 'buy' else OrderSide.SELL
+        
         try:
-            # SDK Call: Submit Order
-            order = self.api.submit_order(
-                symbol=symbol, qty=qty, side=side, 
-                type='market', time_in_force='gtc'
-            )
+            order_request = None
             
-            # SDK Call: Submit Stop Loss (Bracket-like behavior)
-            if stop_loss and side == 'buy':
-                self.api.submit_order(
-                    symbol=symbol, qty=qty, side='sell', 
-                    type='stop', stop_price=stop_loss, time_in_force='gtc'
+            # 2. Construct the correct Request Object
+            if order_type == 'market':
+                order_request = MarketOrderRequest(
+                    symbol=symbol,
+                    qty=qty,
+                    side=side_enum,
+                    time_in_force=TimeInForce.DAY
                 )
-            
-            price = float(order.filled_avg_price or order.limit_price or 0)
-            discord_logger.log_trade(side, symbol, qty, price)
-            return order
+            elif order_type == 'stop':
+                if not stop_loss_price:
+                    raise ValueError("Stop price required for stop orders")
+                order_request = StopOrderRequest(
+                    symbol=symbol,
+                    qty=qty,
+                    side=side_enum,
+                    time_in_force=TimeInForce.GTC,
+                    stop_price=stop_loss_price
+                )
+
+            # 3. Submit
+            if order_request:
+                order = self.client.submit_order(order_request)
+                
+                # Log success
+                filled_price = order.filled_avg_price if order.filled_avg_price else "Pending"
+                discord_logger.log_trade(side, symbol, qty, filled_price)
+                return order
+
         except Exception as e:
-            discord_logger.log_error(f"Order Failed: {e}")
+            discord_logger.log_error(f"Order failed for {symbol}: {str(e)}")
             return None
