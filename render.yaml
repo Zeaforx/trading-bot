@@ -1,0 +1,34 @@
+databases:
+  - name: trading-db
+    plan: free # Note: Free databases expire after 90 days on Render
+
+services:
+  - type: worker
+    name: trading-bot
+    runtime: docker
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trading-db
+          property: connectionString
+      
+      # Alpaca Configuration
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_SECRET_KEY
+        sync: false
+      - key: ALPACA_BASE_URL
+        value: https://paper-api.alpaca.markets
+      - key: ALPACA_PAPER
+        value: "true"
+
+      # Discord Webhooks
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: DISCORD_WEBHOOK_TRADES
+        sync: false
+      - key: DISCORD_WEBHOOK_ALERTS
+        sync: false
+      - key: DISCORD_WEBHOOK_DEBUG
+        sync: false
