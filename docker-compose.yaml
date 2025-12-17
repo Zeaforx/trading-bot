@@ -20,7 +20,7 @@ services:
 
   # Service 2: The Database
   db:
-    image: postgres:15-alpine
+    image: postgres:15.15
     container_name: trading_postgres
     restart: always
     environment:

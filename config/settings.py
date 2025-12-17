@@ -1,13 +1,14 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv('local.env')
 
 class Settings:
     # Alpaca API
     ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
     ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
     ALPACA_BASE_URL = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
+    ALPACA_PAPER = True
     
     # Discord (Dual Channels)
     DISCORD_WEBHOOK_TRADES = os.getenv("DISCORD_WEBHOOK_TRADES")
