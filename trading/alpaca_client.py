@@ -1,6 +1,6 @@
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest, StopOrderRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.requests import MarketOrderRequest, StopOrderRequest, LimitOrderRequest, TakeProfitRequest, StopLossRequest
+from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
 from config.settings import settings
 from notifications.discord_logger import discord_logger
 
@@ -30,10 +30,10 @@ class AlpacaClient:
         except Exception:
             return None
 
-    def submit_order(self, symbol, qty, side, order_type='market', stop_loss_price=None):
+    def submit_order(self, symbol, qty, side, order_type, limit_price=None, stop_loss_price=None, take_profit_price=None):
         """
         Submit order using modern Request objects.
-        side: 'buy' or 'sell' (string)
+        Supports Market, Limit, Stop, and Bracket (OTO) orders.
         """
         # 1. Convert string side to Enum
         side_enum = OrderSide.BUY if side.lower() == 'buy' else OrderSide.SELL
@@ -49,6 +49,38 @@ class AlpacaClient:
                     side=side_enum,
                     time_in_force=TimeInForce.DAY
                 )
+            
+            elif order_type == 'limit':
+                if not limit_price:
+                    raise ValueError("Limit price required for limt orders")
+                
+                # Check for OTO (One-Triggers-Other) parameters
+                # If we have a stop_loss_price, we use a Bracket Order (or OTO)
+                if stop_loss_price or take_profit_price:
+                    # Construct nested requests
+                    sl_req = StopLossRequest(stop_price=stop_loss_price) if stop_loss_price else None
+                    tp_req = TakeProfitRequest(limit_price=take_profit_price) if take_profit_price else None
+                    
+                    order_request = LimitOrderRequest(
+                        symbol=symbol,
+                        qty=qty,
+                        side=side_enum,
+                        time_in_force=TimeInForce.GTC,
+                        limit_price=limit_price,
+                        order_class=OrderClass.BRACKET if (sl_req and tp_req) else OrderClass.OTO,
+                        stop_loss=sl_req,
+                        take_profit=tp_req
+                    )
+                else:
+                    # Standard Limit Order
+                    order_request = LimitOrderRequest(
+                        symbol=symbol,
+                        qty=qty,
+                        side=side_enum,
+                        time_in_force=TimeInForce.GTC,
+                        limit_price=limit_price
+                    )
+
             elif order_type == 'stop':
                 if not stop_loss_price:
                     raise ValueError("Stop price required for stop orders")
@@ -65,8 +97,8 @@ class AlpacaClient:
                 order = self.client.submit_order(order_request)
                 
                 # Log success
-                filled_price = order.filled_avg_price if order.filled_avg_price else "Pending"
-                discord_logger.log_trade(side, symbol, qty, filled_price)
+                price_log = f"${limit_price}" if limit_price else "MKT"
+                discord_logger.log_trade(side, symbol, qty, price_log)
                 return order
 
         except Exception as e:
