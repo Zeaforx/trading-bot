@@ -14,6 +14,8 @@ class LowRiskSwingStrategy:
         # OPTIMIZATION: Use EMA instead of SMA (Lag reduction)
         df["sma_short"] = self.indicators.ema(df, settings.SMA_SHORT)
         df["sma_long"] = self.indicators.ema(df, settings.SMA_LONG)
+        # OPTIMIZATION: Volume SMA for Confirmation
+        df["sma_volume"] = df["volume"].rolling(window=20).mean()
 
         df["rsi"] = self.indicators.rsi(df, settings.RSI_PERIOD)
         df["atr"] = self.indicators.atr(df)
@@ -45,6 +47,8 @@ class LowRiskSwingStrategy:
             if (
                 latest["sma_short"] > latest["sma_long"]
                 and prev["sma_short"] <= prev["sma_long"]
+                # OPTIMIZATION: Volume Confirmation
+                and latest["volume"] > latest["sma_volume"]
             ):
                 score += 3
                 reasons.append("Bullish EMA crossover (Trend)")

@@ -39,20 +39,25 @@ class TradingBot:
     def run_cycle(self):
         discord_logger.log_stage("Cycle Start", "Beginning analysis...")
 
+        # STAGE 1: Batch Data Fetching (Optimization)
+        # Fetch data for ALL symbols in one request to reduce API latency and impact
+        discord_logger.log_stage(
+            "Cycle Update", f"Fetching data for {len(self.symbols)} symbols..."
+        )
+        batch_data = self.collector.fetch_latest_bars(self.symbols, limit=100)
+
+        if batch_data.empty:
+            discord_logger.log_stage("Cycle Warning", "No data returned from API.")
+            return
+
         for symbol in self.symbols:
             try:
-                # STAGE 1: Data
-                # Note: alpaca-py returns a Multi-Index DataFrame (Symbol, Timestamp)
-                data = self.collector.fetch_latest_bars(symbol, limit=100)
-
-                if data.empty:
-                    discord_logger.log_stage("Skipping", "No data found.", symbol)
+                # FIX 2: Handle Multi-Index safely
+                if symbol not in batch_data.index:
+                    discord_logger.log_stage("Skipping", "No data for symbol", symbol)
                     continue
 
-                # FIX 2: Handle Multi-Index
-                # We must drop the 'symbol' index level so the strategy just sees price columns
-                # If we don't do this, the strategy will fail to find 'close', 'open', etc.
-                single_symbol_data = data.loc[symbol] if symbol in data.index else data
+                single_symbol_data = batch_data.loc[symbol]
 
                 # STAGE 2: Analysis
                 signal, score, reason, atr, debug_data = self.strategy.generate_signal(
@@ -96,7 +101,8 @@ class TradingBot:
                         "Decision", f"🚨 SIGNAL: {signal}\nReason: {reason}", symbol
                     )
 
-                    current_price = self.collector.get_current_price(symbol)
+                    # OPTIMIZATION: Use the close price from our batch data instead of a new API call
+                    current_price = float(single_symbol_data.iloc[-1]["close"])
                     self.executor.execute_signal(symbol, signal, current_price, atr)
 
             except Exception as e:

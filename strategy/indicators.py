@@ -31,7 +31,7 @@ class Indicators:
 
         ranges = pd.concat([high_low, high_close, low_close], axis=1)
         true_range = np.max(ranges, axis=1)
-        return true_range.rolling(period).mean()
+        return true_range.ewm(alpha=1 / period, adjust=False).mean()
 
     @staticmethod
     def macd(data, fast=12, slow=26, signal=9):

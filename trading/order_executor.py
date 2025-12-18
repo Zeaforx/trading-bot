@@ -36,26 +36,25 @@ class OrderExecutor:
 
             # Shares = Risk Amount / Risk Per Share
             if sl_dist > 0:
-                qty = int(risk_amount / sl_dist)
+                # OPTIMIZATION: Use fractional shares (round to 4 decimals for safety)
+                qty = round(risk_amount / sl_dist, 4)
             else:
                 qty = 0
 
             # Cap size at MAX_POSITION_SIZE (e.g. 5% of portfolio)
-            max_qty = int(
-                (portfolio_value * settings.MAX_POSITION_SIZE) / current_price
-            )
+            max_qty = (portfolio_value * settings.MAX_POSITION_SIZE) / current_price
             qty = min(qty, max_qty)
 
-            if qty < 1:
+            if qty < 0.0001:
                 print(
                     f"⚠️ Calculated quantity 0 for {symbol} (Risk: ${risk_amount:.2f}, SL Dist: {sl_dist:.2f})"
                 )
                 return
 
             # --- 2. Calculate Prices ---
-            # Limit Buy Price = Current Price * slightly aggressive to ensure fill (e.g. +0.1%)
-            # or just Bid/Ask if we had it. For now, use current_price.
-            limit_entry_price = current_price
+            # OPTIMIZATION: Marketable Limit Order (Current + 0.1% buffer)
+            # This ensures we cross the spread and get filled in fast moves, but don't pay infinite slippage.
+            limit_entry_price = current_price * 1.001
 
             stop_loss_price = limit_entry_price - sl_dist
 
