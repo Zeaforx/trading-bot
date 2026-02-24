@@ -1,6 +1,9 @@
+import logging
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class DiscordLogger:
@@ -13,14 +16,14 @@ class DiscordLogger:
                     "title": title,
                     "description": description,
                     "color": color,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ]
         }
         try:
             requests.post(webhook_url, json=embed)
         except Exception as e:
-            print(f"Discord Error: {e}")
+            logger.error("Discord send failed: %s", e)
 
     def log_stage(self, stage, message, symbol=None, details=None):
         """

@@ -4,25 +4,20 @@ from config.settings import settings
 
 
 class LowRiskSwingStrategy:
-    def __init__(self):
-        self.indicators = Indicators()
-
     def calculate_indicators(self, data):
         """Calculate all required indicators"""
         df = data.copy()
 
-        # OPTIMIZATION: Use EMA instead of SMA (Lag reduction)
-        df["sma_short"] = self.indicators.ema(df, settings.SMA_SHORT)
-        df["sma_long"] = self.indicators.ema(df, settings.SMA_LONG)
+        df["sma_short"] = Indicators.ema(df, settings.SMA_SHORT)
+        df["sma_long"] = Indicators.ema(df, settings.SMA_LONG)
         # OPTIMIZATION: Volume SMA for Confirmation
         df["sma_volume"] = df["volume"].rolling(window=20).mean()
 
-        df["rsi"] = self.indicators.rsi(df, settings.RSI_PERIOD)
-        df["atr"] = self.indicators.atr(df)
-        df["macd"], df["macd_signal"] = self.indicators.macd(df)
+        df["rsi"] = Indicators.rsi(df, settings.RSI_PERIOD)
+        df["atr"] = Indicators.atr(df)
+        df["macd"], df["macd_signal"] = Indicators.macd(df)
 
-        # OPTIMIZATION: Add ADX for Regime Filter
-        df["adx"] = self.indicators.adx(df, settings.ADX_PERIOD)
+        df["adx"] = Indicators.adx(df, settings.ADX_PERIOD)
 
         return df
 
@@ -109,5 +104,3 @@ class LowRiskSwingStrategy:
 
         # Return the new debug_data dictionary at the end
         return signal, score, "; ".join(reasons), latest["atr"], debug_data
-
-        # return signal, score, "; ".join(reasons), latest["atr"]

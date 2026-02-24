@@ -1,11 +1,13 @@
-from datetime import datetime, timedelta
-from alpaca.data.historical import StockHistoricalDataClient
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime, timedelta, timezone
+
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest, StockQuotesRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
 from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class AlpacaCollector:
@@ -29,7 +31,7 @@ class AlpacaCollector:
         """
         # Calculate 'start' time to force fresh data (Sliding Window logic)
         # We ask for 2x the limit in minutes to account for gaps/holidays
-        time_ago = datetime.utcnow() - timedelta(minutes=limit * 2)
+        time_ago = datetime.now(timezone.utc) - timedelta(minutes=limit * 2)
 
         # Build the Request Object (Required by new SDK)
         request_params = StockBarsRequest(
@@ -56,7 +58,7 @@ class AlpacaCollector:
             return 0.0
 
         except Exception as e:
-            print(f"Error getting price for {symbol}: {e}")
+            logger.error("Error getting price for %s: %s", symbol, e)
             return 0.0
 
     def get_clock(self):
@@ -72,5 +74,5 @@ class AlpacaCollector:
             if symbol in res:
                 return res[symbol][0]
         except Exception as e:
-            print(f"Error getting quote for {symbol}: {e}")
+            logger.error("Error getting quote for %s: %s", symbol, e)
         return None

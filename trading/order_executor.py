@@ -1,20 +1,16 @@
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from trading.alpaca_client import AlpacaClient
 from config.settings import settings
 from data.storage.database import SessionLocal
 from data.storage.models import Trade
 
+logger = logging.getLogger(__name__)
+
 
 class OrderExecutor:
     def __init__(self):
         self.client = AlpacaClient()
-
-    def check_risk_management(self, current_prices):
-        """
-        DEPRECATED: Now using Server-Side OTO Stops.
-        Kept as a fallback or for logging if needed, but primary risk is handled by the order itself.
-        """
-        pass
 
     def execute_signal(self, symbol, signal, current_price, atr):
         """Execute Buy/Sell based on strategy signal using Limit OTO Orders"""
@@ -36,7 +32,6 @@ class OrderExecutor:
 
             # Shares = Risk Amount / Risk Per Share
             if sl_dist > 0:
-                # OPTIMIZATION: Use fractional shares (round to 4 decimals for safety)
                 qty = round(risk_amount / sl_dist, 4)
             else:
                 qty = 0
@@ -46,26 +41,27 @@ class OrderExecutor:
             qty = min(qty, max_qty)
 
             if qty < 0.0001:
-                print(
-                    f"⚠️ Calculated quantity 0 for {symbol} (Risk: ${risk_amount:.2f}, SL Dist: {sl_dist:.2f})"
+                logger.warning(
+                    "Calculated quantity 0 for %s (Risk: $%.2f, SL Dist: %.2f)",
+                    symbol, risk_amount, sl_dist,
                 )
                 return
 
             # --- 2. Calculate Prices ---
-            # OPTIMIZATION: Marketable Limit Order (Current + 0.1% buffer)
-            # This ensures we cross the spread and get filled in fast moves, but don't pay infinite slippage.
-            limit_entry_price = current_price * 1.001
+            # Marketable Limit Order (Current + slippage buffer)
+            limit_entry_price = current_price * (1 + settings.SLIPPAGE_BUFFER_PCT)
 
             stop_loss_price = limit_entry_price - sl_dist
 
-            # Optional: Dynamic Take Profit (2:1 Ratio)
+            # Dynamic Take Profit (risk:reward ratio)
             take_profit_price = limit_entry_price + (
                 sl_dist * settings.RISK_REWARD_RATIO
             )
 
             # --- 3. Submit Limit OTO Order ---
-            print(
-                f"🚀 Submitting BUY {symbol} Qty:{qty} Limit:${limit_entry_price:.2f} SL:${stop_loss_price:.2f}"
+            logger.info(
+                "Submitting BUY %s Qty:%s Limit:$%.2f SL:$%.2f",
+                symbol, qty, limit_entry_price, stop_loss_price,
             )
 
             order = self.client.submit_order(
@@ -80,26 +76,24 @@ class OrderExecutor:
 
             if order:
                 # 4. Record in Database
-                db = SessionLocal()
-                trade = Trade(
-                    symbol=symbol,
-                    side="buy",
-                    quantity=qty,
-                    entry_price=limit_entry_price,
-                    stop_loss=stop_loss_price,
-                    status="open",
-                )
-                db.add(trade)
-                db.commit()
-                db.close()
+                with SessionLocal() as db:
+                    trade = Trade(
+                        symbol=symbol,
+                        side="buy",
+                        quantity=qty,
+                        entry_price=limit_entry_price,
+                        stop_loss=stop_loss_price,
+                        status="open",
+                    )
+                    db.add(trade)
+                    db.commit()
 
         elif signal == "SELL" and position:
             # Alpaca-py returns strings for qty_available, convert to float
             qty = float(position.qty_available)
             if qty > 0:
-                # Exit with Limit Order at current price (or slightly lower to chase)
-                # For safety, ensure we cross the spread.
-                limit_exit = current_price * 0.999
+                # Exit with Limit Order (slightly below current to cross spread)
+                limit_exit = current_price * (1 - settings.SLIPPAGE_BUFFER_PCT)
 
                 self.client.submit_order(
                     symbol=symbol,
@@ -110,15 +104,15 @@ class OrderExecutor:
                 )
 
                 # Close in Database
-                db = SessionLocal()
-                trade = (
-                    db.query(Trade)
-                    .filter(Trade.symbol == symbol, Trade.status == "open")
-                    .first()
-                )
-                if trade:
-                    trade.status = "closed"
-                    trade.exit_price = current_price
-                    trade.exit_time = datetime.utcnow()
-                    db.commit()
-                db.close()
+                with SessionLocal() as db:
+                    trade = (
+                        db.query(Trade)
+                        .filter(Trade.symbol == symbol, Trade.status == "open")
+                        .first()
+                    )
+                    if trade:
+                        trade.status = "closed"
+                        trade.exit_price = current_price
+                        trade.exit_time = datetime.now(timezone.utc)
+                        db.commit()
+

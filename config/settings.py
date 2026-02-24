@@ -1,7 +1,15 @@
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv("local.env")
+
+# Configure logging for the entire application
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 class Settings:
@@ -9,7 +17,7 @@ class Settings:
     ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
     ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
     ALPACA_BASE_URL = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
-    ALPACA_PAPER = True
+    ALPACA_PAPER = os.getenv("ALPACA_PAPER", "true").lower() == "true"
 
     # Discord (Dual Channels)
     DISCORD_WEBHOOK_TRADES = os.getenv("DISCORD_WEBHOOK_TRADES")
@@ -28,6 +36,7 @@ class Settings:
     STOP_LOSS_ATR_MULTIPLIER = 2.0
     RISK_REWARD_RATIO = 2.0  # Target 2x risk
     MAX_SPREAD_PCT = 0.001  # 0.1% max spread to trade
+    SLIPPAGE_BUFFER_PCT = 0.001  # 0.1% slippage buffer for limit orders
 
     # Strategy
     SYMBOLS = ["SPY", "QQQ", "AAPL", "MSFT"]
@@ -44,3 +53,4 @@ class Settings:
 
 
 settings = Settings()
+
