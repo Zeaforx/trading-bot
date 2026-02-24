@@ -1,15 +1,19 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Numeric
-from sqlalchemy.ext.declarative import declarative_base
-from datetime import datetime
+from sqlalchemy.orm import declarative_base
+from datetime import datetime, timezone
 
 Base = declarative_base()
+
+
+def _utc_now():
+    return datetime.now(timezone.utc)
 
 class PriceData(Base):
     __tablename__ = 'price_data'
     
     id = Column(Integer, primary_key=True)
     symbol = Column(String, index=True)
-    timestamp = Column(DateTime, index=True)
+    timestamp = Column(DateTime(timezone=True), index=True)
     open = Column(Float)
     high = Column(Float)
     low = Column(Float)
@@ -28,8 +32,8 @@ class Trade(Base):
     pnl = Column(Numeric(10, 2), nullable=True)
     stop_loss = Column(Float)
     take_profit = Column(Float, nullable=True)
-    entry_time = Column(DateTime, default=datetime.utcnow)
-    exit_time = Column(DateTime, nullable=True)
+    entry_time = Column(DateTime(timezone=True), default=_utc_now)
+    exit_time = Column(DateTime(timezone=True), nullable=True)
     status = Column(String, default='open')  # 'open', 'closed'
 
 class Signal(Base):
@@ -38,6 +42,6 @@ class Signal(Base):
     id = Column(Integer, primary_key=True)
     symbol = Column(String)
     signal_type = Column(String)  # 'BUY', 'SELL', 'HOLD'
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime(timezone=True), default=_utc_now)
     indicators = Column(String)  # JSON string of indicator values
     executed = Column(Boolean, default=False)

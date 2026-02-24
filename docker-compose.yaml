@@ -1,19 +1,18 @@
-version: '3.8'
-
 services:
   # Service 1: Your Trading Bot
   trading-bot:
     build: .
     container_name: trading_bot
-    restart: always  # Auto-restart if it crashes!
+    restart: always
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     env_file:
       - local.env
     environment:
-      # OVERRIDE the local DB URL. 
+      # OVERRIDE the local DB URL.
       # In Docker, the host is the service name ('db'), not 'localhost'
-      - DATABASE_URL=postgresql://postgres:password@db:5432/tradingbot
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-password}@db:5432/tradingbot
     volumes:
       # Optional: Map a local logs folder if you write logs to files
       - ./logs:/app/logs
@@ -25,13 +24,18 @@ services:
     restart: always
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_DB=tradingbot
     volumes:
       # This ensures your trading history survives if the container restarts
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

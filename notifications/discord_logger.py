@@ -1,6 +1,9 @@
+import logging
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class DiscordLogger:
@@ -13,14 +16,15 @@ class DiscordLogger:
                     "title": title,
                     "description": description,
                     "color": color,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             ]
         }
         try:
-            requests.post(webhook_url, json=embed)
-        except Exception as e:
-            print(f"Discord Error: {e}")
+            response = requests.post(webhook_url, json=embed, timeout=5)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logger.exception("Discord send failed for webhook_url=%s", webhook_url, exc_info=True)
 
     def log_stage(self, stage, message, symbol=None, details=None):
         """
@@ -48,8 +52,9 @@ class DiscordLogger:
             settings.DISCORD_WEBHOOK_DEBUG, title_text, description_text, 9807270
         )
 
-    def log_trade(self, action, symbol, qty, price):
-        msg = f"**{action.upper()}**\nSymbol: {symbol}\nQty: {qty}\nPrice: ${price:.2f}"
+    def log_trade(self, action, symbol, qty, price, price_label=None):
+        display_price = price_label if price_label else (f"${price:.2f}" if price is not None else "MKT")
+        msg = f"**{action.upper()}**\nSymbol: {symbol}\nQty: {qty}\nPrice: {display_price}"
         color = 3066993 if action.lower() == "buy" else 15158332
         self._send(settings.DISCORD_WEBHOOK_TRADES, "Trade Executed", msg, color)
 
