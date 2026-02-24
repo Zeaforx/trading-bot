@@ -115,8 +115,9 @@ class TradingBot:
                     )
 
                     current_price = float(single_symbol_data.iloc[-1]["close"])
-                    self.executor.execute_signal(symbol, signal, current_price, atr)
-                    self.trades_today += 1
+                    success = self.executor.execute_signal(symbol, signal, current_price, atr)
+                    if success:
+                        self.trades_today += 1
 
             except Exception as e:
                 discord_logger.log_error(f"Error processing {symbol}: {str(e)}")

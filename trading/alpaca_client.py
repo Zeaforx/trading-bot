@@ -92,13 +92,12 @@ class AlpacaClient:
                     stop_price=stop_loss_price
                 )
 
-            # 3. Submit
             if order_request:
                 order = self.client.submit_order(order_request)
                 
                 # Log success
-                price_log = f"${limit_price}" if limit_price else "MKT"
-                discord_logger.log_trade(side, symbol, qty, price_log)
+                price_label = f"${limit_price:.2f}" if limit_price else "MKT"
+                discord_logger.log_trade(side, symbol, qty, limit_price, price_label=price_label)
                 return order
 
         except Exception as e:

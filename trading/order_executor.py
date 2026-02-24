@@ -15,7 +15,7 @@ class OrderExecutor:
     def execute_signal(self, symbol, signal, current_price, atr):
         """Execute Buy/Sell based on strategy signal using Limit OTO Orders"""
         if signal == "HOLD":
-            return
+            return False
 
         # Check existing position
         position = self.client.get_position(symbol)
@@ -45,7 +45,7 @@ class OrderExecutor:
                     "Calculated quantity 0 for %s (Risk: $%.2f, SL Dist: %.2f)",
                     symbol, risk_amount, sl_dist,
                 )
-                return
+                return False
 
             # --- 2. Calculate Prices ---
             # Marketable Limit Order (Current + slippage buffer)
@@ -87,7 +87,7 @@ class OrderExecutor:
                     )
                     db.add(trade)
                     db.commit()
-
+                return True
         elif signal == "SELL" and position:
             # Alpaca-py returns strings for qty_available, convert to float
             qty = float(position.qty_available)
@@ -95,7 +95,7 @@ class OrderExecutor:
                 # Exit with Limit Order (slightly below current to cross spread)
                 limit_exit = current_price * (1 - settings.SLIPPAGE_BUFFER_PCT)
 
-                self.client.submit_order(
+                order = self.client.submit_order(
                     symbol=symbol,
                     qty=qty,
                     side="sell",
@@ -103,16 +103,18 @@ class OrderExecutor:
                     limit_price=limit_exit,
                 )
 
-                # Close in Database
-                with SessionLocal() as db:
-                    trade = (
-                        db.query(Trade)
-                        .filter(Trade.symbol == symbol, Trade.status == "open")
-                        .first()
-                    )
-                    if trade:
-                        trade.status = "closed"
-                        trade.exit_price = current_price
-                        trade.exit_time = datetime.now(timezone.utc)
-                        db.commit()
-
+                if order:
+                    # Close in Database only if order submitted successfully
+                    with SessionLocal() as db:
+                        trade = (
+                            db.query(Trade)
+                            .filter(Trade.symbol == symbol, Trade.status == "open")
+                            .first()
+                        )
+                        if trade:
+                            trade.status = "closed"
+                            trade.exit_price = current_price
+                            trade.exit_time = datetime.now(timezone.utc)
+                            db.commit()
+                return True
+        return False
