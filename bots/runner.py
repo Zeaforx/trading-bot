@@ -16,6 +16,7 @@ class TradingBot:
         self.executor = OrderExecutor()
         self.symbols = settings.SYMBOLS
         self.trades_today = 0
+        self._market_closed_notified = False
 
     def start(self):
         discord_logger.log_system("🚀 Bot Started")
@@ -24,9 +25,13 @@ class TradingBot:
                 clock = self.collector.trading_client.get_clock()
 
                 if clock.is_open:
+                    self._market_closed_notified = False
                     self.run_cycle()
                 else:
                     logger.info("Market Closed. Opens at %s", clock.next_open)
+                    if not self._market_closed_notified:
+                        discord_logger.log_system(f"💤 Market Closed. Opens at {clock.next_open}")
+                        self._market_closed_notified = True
 
                 time.sleep(settings.STRATEGY_EVAL_INTERVAL * 60)
 
